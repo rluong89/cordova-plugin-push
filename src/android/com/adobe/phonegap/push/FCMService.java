@@ -399,6 +399,7 @@ public class FCMService extends FirebaseMessagingService implements PushConstant
     notificationIntent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
     notificationIntent.putExtra(PUSH_BUNDLE, extras);
     notificationIntent.putExtra(NOT_ID, notId);
+    notificationIntent.putExtra(GROUP_ID, groupId);
 
     SecureRandom random = new SecureRandom();
     int requestCode = random.nextInt();
@@ -409,6 +410,7 @@ public class FCMService extends FirebaseMessagingService implements PushConstant
     Intent dismissedNotificationIntent = new Intent(this, PushDismissedHandler.class);
     dismissedNotificationIntent.putExtra(PUSH_BUNDLE, extras);
     dismissedNotificationIntent.putExtra(NOT_ID, notId);
+    dismissedNotificationIntent.putExtra(GROUP_ID, groupId);
     dismissedNotificationIntent.putExtra(DISMISSED, true);
     dismissedNotificationIntent.setAction(PUSH_DISMISSED);
 
@@ -547,7 +549,7 @@ public class FCMService extends FirebaseMessagingService implements PushConstant
     /*
      * Notification add actions
      */
-    createActions(extras, mBuilder, resources, packageName, notId);
+    createActions(extras, mBuilder, resources, packageName, notId, groupId);
 
     mNotificationManager.notify(appName, groupId, mBuilder.build());
   }
@@ -557,17 +559,19 @@ public class FCMService extends FirebaseMessagingService implements PushConstant
     String callback,
     Bundle extras,
     boolean foreground,
-    int notId
+    int notId,
+    int groupId
   ) {
     intent.putExtra(CALLBACK, callback);
     intent.putExtra(PUSH_BUNDLE, extras);
     intent.putExtra(FOREGROUND, foreground);
     intent.putExtra(NOT_ID, notId);
+    intent.putExtra(GROUP_ID, groupId);
   }
 
   private void createActions (
     Bundle extras, NotificationCompat.Builder mBuilder, Resources resources,
-    String packageName, int notId
+    String packageName, int notId, int groupId
   ) {
     Log.d(LOG_TAG, "create actions: with in-line");
     String actions = extras.getString(ACTIONS);
@@ -600,7 +604,7 @@ public class FCMService extends FirebaseMessagingService implements PushConstant
               intent = new Intent(this, BackgroundActionButtonHandler.class);
             }
 
-            updateIntent(intent, action.getString(CALLBACK), extras, foreground, notId);
+            updateIntent(intent, action.getString(CALLBACK), extras, foreground, notId, groupId);
 
             if (android.os.Build.VERSION.SDK_INT <= android.os.Build.VERSION_CODES.M) {
               Log.d(LOG_TAG, "push activity for notId " + notId);
@@ -621,7 +625,7 @@ public class FCMService extends FirebaseMessagingService implements PushConstant
             }
           } else if (foreground) {
             intent = new Intent(this, PushHandlerActivity.class);
-            updateIntent(intent, action.getString(CALLBACK), extras, foreground, notId);
+            updateIntent(intent, action.getString(CALLBACK), extras, foreground, notId, groupId);
             pIntent = PendingIntent.getActivity(
               this, uniquePendingIntentRequestCode,
               intent,
@@ -629,7 +633,7 @@ public class FCMService extends FirebaseMessagingService implements PushConstant
             );
           } else {
             intent = new Intent(this, BackgroundActionButtonHandler.class);
-            updateIntent(intent, action.getString(CALLBACK), extras, foreground, notId);
+            updateIntent(intent, action.getString(CALLBACK), extras, foreground, notId, groupId);
             pIntent = PendingIntent.getBroadcast(
               this, uniquePendingIntentRequestCode,
               intent,
