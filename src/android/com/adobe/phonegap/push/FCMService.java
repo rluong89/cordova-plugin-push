@@ -352,7 +352,6 @@ public class FCMService extends FirebaseMessagingService implements PushConstant
     }
     if (badgeCount == 0) {
       NotificationManager mNotificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-      mNotificationManager.cancelAll();
     }
 
     Log.d(LOG_TAG, "message =[" + message + "]");

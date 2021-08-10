@@ -37,7 +37,6 @@ public class BackgroundHandlerActivity extends Activity implements PushConstants
 
     if (!startOnBackground) {
       NotificationManager notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-      notificationManager.cancel(FCMService.getAppName(this), notId);
     }
 
     boolean isPushPluginActive = PushPlugin.isActive();
@@ -120,6 +119,5 @@ public class BackgroundHandlerActivity extends Activity implements PushConstants
     super.onResume();
     final NotificationManager notificationManager = (NotificationManager) this.getSystemService(
       Context.NOTIFICATION_SERVICE);
-    notificationManager.cancelAll();
   }
 }
