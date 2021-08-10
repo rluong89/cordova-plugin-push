@@ -41,6 +41,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -52,19 +53,19 @@ import java.security.SecureRandom;
 public class FCMService extends FirebaseMessagingService implements PushConstants {
 
   private static final String LOG_TAG = "Push_FCMService";
-  private static HashMap<Integer, ArrayList<String>> messageMap = new HashMap<Integer, ArrayList<String>>();
+  private static HashMap<Integer, ArrayList<Map.Entry<Integer, String>>> messageMap = new HashMap<Integer, ArrayList<Map.Entry<Integer, String>>>();
 
-  public void setNotification (int notId, String message) {
-    ArrayList<String> messageList = messageMap.get(notId);
+  public void setNotification (int notId, int groupId, String message) {
+    ArrayList<Map.Entry<Integer, String>> messageList = messageMap.get(groupId);
     if (messageList == null) {
-      messageList = new ArrayList<String>();
-      messageMap.put(notId, messageList);
+      messageList = new ArrayList<Map.Entry<Integer, String>>();
+      messageMap.put(groupId, messageList);
     }
 
     if (message.isEmpty()) {
       messageList.clear();
     } else {
-      messageList.add(message);
+      messageList.add(new AbstractMap.SimpleImmutableEntry<>(notId, message));
     }
   }
 
@@ -393,6 +394,7 @@ public class FCMService extends FirebaseMessagingService implements PushConstant
     Resources resources = context.getResources();
 
     int notId = parseInt(NOT_ID, extras);
+    int groupId = extras.getString(GROUP_ID) == null ? notId : parseInt(GROUP_ID, extras);
     Intent notificationIntent = new Intent(this, PushHandlerActivity.class);
     notificationIntent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
     notificationIntent.putExtra(PUSH_BUNDLE, extras);
@@ -525,7 +527,7 @@ public class FCMService extends FirebaseMessagingService implements PushConstant
     /*
      * Notification message
      */
-    setNotificationMessage(notId, extras, mBuilder);
+    setNotificationMessage(notId, groupId, extras, mBuilder);
 
     /*
      * Notification count
@@ -739,17 +741,18 @@ public class FCMService extends FirebaseMessagingService implements PushConstant
 
   private void setNotificationMessage (
     int notId,
+    int groupId,
     Bundle extras,
     NotificationCompat.Builder mBuilder
   ) {
     String message = extras.getString(MESSAGE);
     String style = extras.getString(STYLE, STYLE_TEXT);
     if (STYLE_INBOX.equals(style)) {
-      setNotification(notId, message);
+      setNotification(notId, groupId, message);
 
       mBuilder.setContentText(fromHtml(message));
 
-      ArrayList<String> messageList = messageMap.get(notId);
+      ArrayList<Map.Entry<Integer, String>> messageList = messageMap.get(groupId);
       Integer sizeList = messageList.size();
       if (sizeList > 1) {
         String sizeListMessage = sizeList.toString();
@@ -763,7 +766,7 @@ public class FCMService extends FirebaseMessagingService implements PushConstant
           .setSummaryText(fromHtml(stacking));
 
         for (int i = messageList.size() - 1; i >= 0; i--) {
-          notificationInbox.addLine(fromHtml(messageList.get(i)));
+          notificationInbox.addLine(fromHtml(messageList.get(i).getValue()));
         }
 
         mBuilder.setStyle(notificationInbox);
@@ -776,7 +779,7 @@ public class FCMService extends FirebaseMessagingService implements PushConstant
         }
       }
     } else if (STYLE_PICTURE.equals(style)) {
-      setNotification(notId, "");
+      setNotification(notId, groupId, "");
 
       NotificationCompat.BigPictureStyle bigPicture = new NotificationCompat.BigPictureStyle();
       bigPicture.bigPicture(getBitmapFromURL(extras.getString(PICTURE)));
@@ -788,7 +791,7 @@ public class FCMService extends FirebaseMessagingService implements PushConstant
 
       mBuilder.setStyle(bigPicture);
     } else {
-      setNotification(notId, "");
+      setNotification(notId, groupId, "");
 
       NotificationCompat.BigTextStyle bigText = new NotificationCompat.BigTextStyle();
 
@@ -804,6 +807,7 @@ public class FCMService extends FirebaseMessagingService implements PushConstant
         }
 
         mBuilder.setStyle(bigText);
+
       }
       /*
       else {
