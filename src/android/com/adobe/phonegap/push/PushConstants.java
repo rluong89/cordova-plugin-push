@@ -8,6 +8,8 @@ public interface PushConstants {
   public static final String TITLE = "title";
   public static final String NOT_ID = "notId";
   public static final String GROUP_ID = "groupId";
+  public static final String NOT_ID_TO_DELETE = "notIdToDelete";
+  public static final String IS_DELETING = "isDeleting";
   public static final String PUSH_BUNDLE = "pushBundle";
   public static final String ICON = "icon";
   public static final String ICON_COLOR = "iconColor";

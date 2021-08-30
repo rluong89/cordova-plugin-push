@@ -77,6 +77,9 @@ public class FCMService extends FirebaseMessagingService implements PushConstant
 
     Bundle extras = new Bundle();
 
+    String groupId = message.getData().get(GROUP_ID);
+    String notIdToDelete = message.getData().get(NOT_ID_TO_DELETE);
+
     if (message.getNotification() != null) {
       extras.putString(TITLE, message.getNotification().getTitle());
       extras.putString(MESSAGE, message.getNotification().getBody());
@@ -104,6 +107,22 @@ public class FCMService extends FirebaseMessagingService implements PushConstant
 
       if (clearBadge) {
         PushPlugin.setApplicationIconBadgeNumber(getApplicationContext(), 0);
+      }
+
+      if (notIdToDelete != null) {
+        ArrayList<Map.Entry<Integer, String>> messageList = messageMap.get(Integer.parseInt(groupId));
+        if(messageList != null) {
+          NotificationCompat.Builder mBuilder = null;
+          NotificationManager mNotificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+          messageList.removeIf(msg -> msg.getKey() == Integer.parseInt(notIdToDelete));
+          if(messageList.size() == 0) {
+            String appName = getAppName(this);
+            mNotificationManager.cancel(appName, Integer.parseInt(groupId));
+            return;
+          } else {
+            extras.putBoolean(IS_DELETING, true);
+          }
+        }
       }
 
       // if we are in the foreground and forceShow is `false` only send data
@@ -752,12 +771,14 @@ public class FCMService extends FirebaseMessagingService implements PushConstant
     String message = extras.getString(MESSAGE);
     String style = extras.getString(STYLE, STYLE_TEXT);
     if (STYLE_INBOX.equals(style)) {
-      setNotification(notId, groupId, message);
-
-      mBuilder.setContentText(fromHtml(message));
-
+      boolean isDeleting = extras.getBoolean(IS_DELETING, false);
+      if(!isDeleting)
+          setNotification(notId, groupId, message);
       ArrayList<Map.Entry<Integer, String>> messageList = messageMap.get(groupId);
       Integer sizeList = messageList.size();
+      message = isDeleting && sizeList >= 1 ? messageList.get(sizeList - 1).getValue() : message;
+      mBuilder.setContentText(fromHtml(message));
+
       if (sizeList > 1) {
         String sizeListMessage = sizeList.toString();
         String stacking = sizeList + " more";
