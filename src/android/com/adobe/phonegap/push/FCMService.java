@@ -549,7 +549,7 @@ public class FCMService extends FirebaseMessagingService implements PushConstant
      */
     createActions(extras, mBuilder, resources, packageName, notId);
 
-    mNotificationManager.notify(appName, notId, mBuilder.build());
+    mNotificationManager.notify(appName, groupId, mBuilder.build());
   }
 
   private void updateIntent (
