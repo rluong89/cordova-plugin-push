@@ -79,6 +79,7 @@ public class FCMService extends FirebaseMessagingService implements PushConstant
 
     String groupId = message.getData().get(GROUP_ID);
     String notIdToDelete = message.getData().get(NOT_ID_TO_DELETE);
+    String ascendingOrder = message.getData().get(ASCENDING_ORDER);
 
     if (message.getNotification() != null) {
       extras.putString(TITLE, message.getNotification().getTitle());
@@ -124,6 +125,7 @@ public class FCMService extends FirebaseMessagingService implements PushConstant
           }
         }
       }
+      extras.putBoolean(ASCENDING_ORDER, Boolean.parseBoolean(ascendingOrder));
 
       // if we are in the foreground and forceShow is `false` only send data
       if (!forceShow && PushPlugin.isInForeground()) {
@@ -772,14 +774,14 @@ public class FCMService extends FirebaseMessagingService implements PushConstant
     String style = extras.getString(STYLE, STYLE_TEXT);
     if (STYLE_INBOX.equals(style)) {
       boolean isDeleting = extras.getBoolean(IS_DELETING, false);
+      boolean ascendingOrder = extras.getBoolean(ASCENDING_ORDER, false);
       if(!isDeleting)
           setNotification(notId, groupId, message);
       ArrayList<Map.Entry<Integer, String>> messageList = messageMap.get(groupId);
       Integer sizeList = messageList.size();
-      message = isDeleting && sizeList >= 1 ? messageList.get(sizeList - 1).getValue() : message;
-      mBuilder.setContentText(fromHtml(message));
-
       if (sizeList > 1) {
+        String contentText = ascendingOrder ? messageList.get(0).getValue() : messageList.get(sizeList - 1).getValue();
+        mBuilder.setContentText(fromHtml(contentText));
         String sizeListMessage = sizeList.toString();
         String stacking = sizeList + " more";
         if (extras.getString(SUMMARY_TEXT) != null) {
@@ -790,14 +792,24 @@ public class FCMService extends FirebaseMessagingService implements PushConstant
           .setBigContentTitle(fromHtml(extras.getString(TITLE)))
           .setSummaryText(fromHtml(stacking));
 
-        for (int i = messageList.size() - 1; i >= 0; i--) {
-          notificationInbox.addLine(fromHtml(messageList.get(i).getValue()));
+        if(ascendingOrder) {
+          for (int i = 0; i < messageList.size(); i++) {
+            notificationInbox.addLine(fromHtml(messageList.get(i).getValue()));
+          }
+        } else {
+          for (int i = messageList.size() - 1; i >= 0; i--) {
+            notificationInbox.addLine(fromHtml(messageList.get(i).getValue()));
+          }
         }
 
         mBuilder.setStyle(notificationInbox);
       } else {
         NotificationCompat.BigTextStyle bigText = new NotificationCompat.BigTextStyle();
-        if (message != null) {
+        if (message != null || isDeleting) {
+          //At this point, the messageList is of size 1.
+          //The case where it is empty is caught beforehand and it is ensured that this section is never reached.
+          message = messageList.get(0).getValue();
+          mBuilder.setContentText(fromHtml(message));
           bigText.bigText(fromHtml(message));
           bigText.setBigContentTitle(fromHtml(extras.getString(TITLE)));
           mBuilder.setStyle(bigText);
