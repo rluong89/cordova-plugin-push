@@ -112,16 +112,22 @@ public class FCMService extends FirebaseMessagingService implements PushConstant
 
       if (notIdToDelete != null) {
         ArrayList<Map.Entry<Integer, String>> messageList = messageMap.get(Integer.parseInt(groupId));
-        if(messageList != null) {
+        if(messageList == null) {
+          return;
+        } else {
           NotificationCompat.Builder mBuilder = null;
           NotificationManager mNotificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-          messageList.removeIf(msg -> msg.getKey() == Integer.parseInt(notIdToDelete));
-          if(messageList.size() == 0) {
-            String appName = getAppName(this);
-            mNotificationManager.cancel(appName, Integer.parseInt(groupId));
+          boolean couldRemove = messageList.removeIf(msg -> msg.getKey() == Integer.parseInt(notIdToDelete));
+          if(!couldRemove) {
             return;
           } else {
-            extras.putBoolean(IS_DELETING, true);
+            if(messageList.size() != 0) {
+              extras.putBoolean(IS_DELETING, true);
+            } else {
+              String appName = getAppName(this);
+              mNotificationManager.cancel(appName, Integer.parseInt(groupId));
+              return;
+            }
           }
         }
       }
