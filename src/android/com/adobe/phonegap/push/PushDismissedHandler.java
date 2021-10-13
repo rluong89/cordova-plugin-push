@@ -15,12 +15,14 @@ public class PushDismissedHandler extends BroadcastReceiver implements PushConst
     FCMService fcm = new FCMService();
     String action = intent.getAction();
     int notID = intent.getIntExtra(NOT_ID, 0);
+    int groupID = intent.getIntExtra(GROUP_ID, notID);
 
     if (action.equals(PUSH_DISMISSED)) {
       Log.d(LOG_TAG, "PushDismissedHandler = " + extras);
       Log.d(LOG_TAG, "not id = " + notID);
+      Log.d(LOG_TAG, "group id = " + groupID);
 
-      fcm.setNotification(notID, "");
+      fcm.setNotification(notID, groupID, "");
     }
   }
 }

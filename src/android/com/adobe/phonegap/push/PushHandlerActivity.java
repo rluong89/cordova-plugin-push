@@ -26,8 +26,10 @@ public class PushHandlerActivity extends Activity implements PushConstants {
     Intent intent = getIntent();
 
     int notId = intent.getExtras().getInt(NOT_ID, 0);
+    int groupId = intent.getExtras().getInt(GROUP_ID, notId);
     Log.d(LOG_TAG, "not id = " + notId);
-    gcm.setNotification(notId, "");
+    Log.d(LOG_TAG, "group id = " + groupId);
+    gcm.setNotification(notId, groupId, "");
     super.onCreate(savedInstanceState);
     Log.v(LOG_TAG, "onCreate");
     String callback = getIntent().getExtras().getString("callback");

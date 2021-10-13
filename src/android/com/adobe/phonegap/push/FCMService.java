@@ -41,6 +41,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -52,19 +53,19 @@ import java.security.SecureRandom;
 public class FCMService extends FirebaseMessagingService implements PushConstants {
 
   private static final String LOG_TAG = "Push_FCMService";
-  private static HashMap<Integer, ArrayList<String>> messageMap = new HashMap<Integer, ArrayList<String>>();
+  private static HashMap<Integer, ArrayList<Map.Entry<Integer, String>>> messageMap = new HashMap<Integer, ArrayList<Map.Entry<Integer, String>>>();
 
-  public void setNotification (int notId, String message) {
-    ArrayList<String> messageList = messageMap.get(notId);
+  public void setNotification (int notId, int groupId, String message) {
+    ArrayList<Map.Entry<Integer, String>> messageList = messageMap.get(groupId);
     if (messageList == null) {
-      messageList = new ArrayList<String>();
-      messageMap.put(notId, messageList);
+      messageList = new ArrayList<Map.Entry<Integer, String>>();
+      messageMap.put(groupId, messageList);
     }
 
     if (message.isEmpty()) {
       messageList.clear();
     } else {
-      messageList.add(message);
+      messageList.add(new AbstractMap.SimpleImmutableEntry<>(notId, message));
     }
   }
 
@@ -75,6 +76,10 @@ public class FCMService extends FirebaseMessagingService implements PushConstant
     Log.d(LOG_TAG, "onMessage - from: " + from);
 
     Bundle extras = new Bundle();
+
+    String groupId = message.getData().get(GROUP_ID);
+    String notIdToDelete = message.getData().get(NOT_ID_TO_DELETE);
+    String ascendingOrder = message.getData().get(ASCENDING_ORDER);
 
     if (message.getNotification() != null) {
       extras.putString(TITLE, message.getNotification().getTitle());
@@ -104,6 +109,29 @@ public class FCMService extends FirebaseMessagingService implements PushConstant
       if (clearBadge) {
         PushPlugin.setApplicationIconBadgeNumber(getApplicationContext(), 0);
       }
+
+      if (notIdToDelete != null) {
+        ArrayList<Map.Entry<Integer, String>> messageList = messageMap.get(Integer.parseInt(groupId));
+        if(messageList == null) {
+          return;
+        } else {
+          NotificationCompat.Builder mBuilder = null;
+          NotificationManager mNotificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+          boolean couldRemove = messageList.removeIf(msg -> msg.getKey() == Integer.parseInt(notIdToDelete));
+          if(!couldRemove) {
+            return;
+          } else {
+            if(messageList.size() != 0) {
+              extras.putBoolean(IS_DELETING, true);
+            } else {
+              String appName = getAppName(this);
+              mNotificationManager.cancel(appName, Integer.parseInt(groupId));
+              return;
+            }
+          }
+        }
+      }
+      extras.putBoolean(ASCENDING_ORDER, Boolean.parseBoolean(ascendingOrder));
 
       // if we are in the foreground and forceShow is `false` only send data
       if (!forceShow && PushPlugin.isInForeground()) {
@@ -393,10 +421,12 @@ public class FCMService extends FirebaseMessagingService implements PushConstant
     Resources resources = context.getResources();
 
     int notId = parseInt(NOT_ID, extras);
+    int groupId = extras.getString(GROUP_ID) == null ? notId : parseInt(GROUP_ID, extras);
     Intent notificationIntent = new Intent(this, PushHandlerActivity.class);
     notificationIntent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
     notificationIntent.putExtra(PUSH_BUNDLE, extras);
     notificationIntent.putExtra(NOT_ID, notId);
+    notificationIntent.putExtra(GROUP_ID, groupId);
 
     SecureRandom random = new SecureRandom();
     int requestCode = random.nextInt();
@@ -407,6 +437,7 @@ public class FCMService extends FirebaseMessagingService implements PushConstant
     Intent dismissedNotificationIntent = new Intent(this, PushDismissedHandler.class);
     dismissedNotificationIntent.putExtra(PUSH_BUNDLE, extras);
     dismissedNotificationIntent.putExtra(NOT_ID, notId);
+    dismissedNotificationIntent.putExtra(GROUP_ID, groupId);
     dismissedNotificationIntent.putExtra(DISMISSED, true);
     dismissedNotificationIntent.setAction(PUSH_DISMISSED);
 
@@ -525,7 +556,7 @@ public class FCMService extends FirebaseMessagingService implements PushConstant
     /*
      * Notification message
      */
-    setNotificationMessage(notId, extras, mBuilder);
+    setNotificationMessage(notId, groupId, extras, mBuilder);
 
     /*
      * Notification count
@@ -545,9 +576,9 @@ public class FCMService extends FirebaseMessagingService implements PushConstant
     /*
      * Notification add actions
      */
-    createActions(extras, mBuilder, resources, packageName, notId);
+    createActions(extras, mBuilder, resources, packageName, notId, groupId);
 
-    mNotificationManager.notify(appName, notId, mBuilder.build());
+    mNotificationManager.notify(appName, groupId, mBuilder.build());
   }
 
   private void updateIntent (
@@ -555,17 +586,19 @@ public class FCMService extends FirebaseMessagingService implements PushConstant
     String callback,
     Bundle extras,
     boolean foreground,
-    int notId
+    int notId,
+    int groupId
   ) {
     intent.putExtra(CALLBACK, callback);
     intent.putExtra(PUSH_BUNDLE, extras);
     intent.putExtra(FOREGROUND, foreground);
     intent.putExtra(NOT_ID, notId);
+    intent.putExtra(GROUP_ID, groupId);
   }
 
   private void createActions (
     Bundle extras, NotificationCompat.Builder mBuilder, Resources resources,
-    String packageName, int notId
+    String packageName, int notId, int groupId
   ) {
     Log.d(LOG_TAG, "create actions: with in-line");
     String actions = extras.getString(ACTIONS);
@@ -598,7 +631,7 @@ public class FCMService extends FirebaseMessagingService implements PushConstant
               intent = new Intent(this, BackgroundActionButtonHandler.class);
             }
 
-            updateIntent(intent, action.getString(CALLBACK), extras, foreground, notId);
+            updateIntent(intent, action.getString(CALLBACK), extras, foreground, notId, groupId);
 
             if (android.os.Build.VERSION.SDK_INT <= android.os.Build.VERSION_CODES.M) {
               Log.d(LOG_TAG, "push activity for notId " + notId);
@@ -619,7 +652,7 @@ public class FCMService extends FirebaseMessagingService implements PushConstant
             }
           } else if (foreground) {
             intent = new Intent(this, PushHandlerActivity.class);
-            updateIntent(intent, action.getString(CALLBACK), extras, foreground, notId);
+            updateIntent(intent, action.getString(CALLBACK), extras, foreground, notId, groupId);
             pIntent = PendingIntent.getActivity(
               this, uniquePendingIntentRequestCode,
               intent,
@@ -627,7 +660,7 @@ public class FCMService extends FirebaseMessagingService implements PushConstant
             );
           } else {
             intent = new Intent(this, BackgroundActionButtonHandler.class);
-            updateIntent(intent, action.getString(CALLBACK), extras, foreground, notId);
+            updateIntent(intent, action.getString(CALLBACK), extras, foreground, notId, groupId);
             pIntent = PendingIntent.getBroadcast(
               this, uniquePendingIntentRequestCode,
               intent,
@@ -739,19 +772,22 @@ public class FCMService extends FirebaseMessagingService implements PushConstant
 
   private void setNotificationMessage (
     int notId,
+    int groupId,
     Bundle extras,
     NotificationCompat.Builder mBuilder
   ) {
     String message = extras.getString(MESSAGE);
     String style = extras.getString(STYLE, STYLE_TEXT);
     if (STYLE_INBOX.equals(style)) {
-      setNotification(notId, message);
-
-      mBuilder.setContentText(fromHtml(message));
-
-      ArrayList<String> messageList = messageMap.get(notId);
+      boolean isDeleting = extras.getBoolean(IS_DELETING, false);
+      boolean ascendingOrder = extras.getBoolean(ASCENDING_ORDER, false);
+      if(!isDeleting)
+          setNotification(notId, groupId, message);
+      ArrayList<Map.Entry<Integer, String>> messageList = messageMap.get(groupId);
       Integer sizeList = messageList.size();
       if (sizeList > 1) {
+        String contentText = ascendingOrder ? messageList.get(0).getValue() : messageList.get(sizeList - 1).getValue();
+        mBuilder.setContentText(fromHtml(contentText));
         String sizeListMessage = sizeList.toString();
         String stacking = sizeList + " more";
         if (extras.getString(SUMMARY_TEXT) != null) {
@@ -762,21 +798,31 @@ public class FCMService extends FirebaseMessagingService implements PushConstant
           .setBigContentTitle(fromHtml(extras.getString(TITLE)))
           .setSummaryText(fromHtml(stacking));
 
-        for (int i = messageList.size() - 1; i >= 0; i--) {
-          notificationInbox.addLine(fromHtml(messageList.get(i)));
+        if(ascendingOrder) {
+          for (int i = 0; i < messageList.size(); i++) {
+            notificationInbox.addLine(fromHtml(messageList.get(i).getValue()));
+          }
+        } else {
+          for (int i = messageList.size() - 1; i >= 0; i--) {
+            notificationInbox.addLine(fromHtml(messageList.get(i).getValue()));
+          }
         }
 
         mBuilder.setStyle(notificationInbox);
       } else {
         NotificationCompat.BigTextStyle bigText = new NotificationCompat.BigTextStyle();
-        if (message != null) {
+        if (message != null || isDeleting) {
+          //At this point, the messageList is of size 1.
+          //The case where it is empty is caught beforehand and it is ensured that this section is never reached.
+          message = messageList.get(0).getValue();
+          mBuilder.setContentText(fromHtml(message));
           bigText.bigText(fromHtml(message));
           bigText.setBigContentTitle(fromHtml(extras.getString(TITLE)));
           mBuilder.setStyle(bigText);
         }
       }
     } else if (STYLE_PICTURE.equals(style)) {
-      setNotification(notId, "");
+      setNotification(notId, groupId, "");
 
       NotificationCompat.BigPictureStyle bigPicture = new NotificationCompat.BigPictureStyle();
       bigPicture.bigPicture(getBitmapFromURL(extras.getString(PICTURE)));
@@ -788,7 +834,7 @@ public class FCMService extends FirebaseMessagingService implements PushConstant
 
       mBuilder.setStyle(bigPicture);
     } else {
-      setNotification(notId, "");
+      setNotification(notId, groupId, "");
 
       NotificationCompat.BigTextStyle bigText = new NotificationCompat.BigTextStyle();
 
@@ -804,6 +850,7 @@ public class FCMService extends FirebaseMessagingService implements PushConstant
         }
 
         mBuilder.setStyle(bigText);
+
       }
       /*
       else {
